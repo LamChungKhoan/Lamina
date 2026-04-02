@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#111216" />
+  <defs>
+    <mask id="cuts">
+      <rect width="512" height="512" fill="white" />
+      <!-- Cut 1: Top Left -->
+      <line x1="340" y1="190" x2="100" y2="120" stroke="black" stroke-width="22" stroke-linecap="round" />
+      <!-- Cut 2: Bottom Left -->
+      <line x1="340" y1="190" x2="80" y2="340" stroke="black" stroke-width="22" stroke-linecap="round" />
+      <!-- Cut 3: Bottom -->
+      <line x1="340" y1="190" x2="280" y2="480" stroke="black" stroke-width="22" stroke-linecap="round" />
+      <!-- Cut 4: Top Right -->
+      <line x1="340" y1="190" x2="480" y2="50" stroke="black" stroke-width="22" stroke-linecap="round" />
+      <circle cx="340" cy="190" r="11" fill="black" />
+    </mask>
+  </defs>
+  <polygon points="256,76 411.88,166 411.88,346 256,436 100.12,346 100.12,166" fill="#FFFFFF" mask="url(#cuts)" />
+</svg>
