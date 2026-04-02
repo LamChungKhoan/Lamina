@@ -718,9 +718,7 @@ export default function App() {
 
   const initChat = useCallback((msgs: Message[], dynamicContext: string = '') => {
     // Create a new instance to ensure it uses the most up-to-date API key
-   const currentApiKey =
-  import.meta.env.VITE_API_KEY ||
-  import.meta.env.VITE_GEMINI_API_KEY;
+    const currentApiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
     const aiInstance = new GoogleGenAI({ apiKey: currentApiKey });
 
     const history = msgs.map(m => {
