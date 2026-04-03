@@ -34,11 +34,26 @@ const response = await fetch(
       }
     );
 
-    const data = await response.json();
+    const text = await response.text();
+
+let data;
+try {
+  data = JSON.parse(text);
+} catch (e) {
+  return res.status(500).json({
+    error: "API trả về không phải JSON",
+    raw: text
+  });
+}
 
     console.log("FULL RESPONSE:", JSON.stringify(data, null, 2));
 
-    if (!response.ok) {
+    if (!response.ok || data.error) {
+  return res.status(500).json({
+    error: "Google API lỗi",
+    detail: data
+  });
+}
       return res.status(500).json({
         error: "Google API lỗi",
         detail: data
