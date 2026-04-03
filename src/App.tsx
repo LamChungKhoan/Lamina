@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, User, Bot, Loader2, AlertCircle, BookOpen, Newspaper, RefreshCcw, Globe, Activity, Image as ImageIcon, X, History, Plus, MessageSquare, Trash2, BarChart2, PanelLeftClose, PanelRightClose, Key, Pencil, Check, Zap } from 'lucide-react';
@@ -12,6 +11,19 @@ import { TradingChart, Trendline, Zone } from './components/TradingChart';
 import { SentimentDashboard } from './components/SentimentDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CandlestickData } from 'lightweight-charts';
+
+async function sendMessageToAI(message) {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ message })
+  });
+
+  const data = await res.json();
+  return data.reply;
+}
 
 // Utility for Tailwind classes
 export function cn(...inputs: ClassValue[]) {
@@ -719,7 +731,6 @@ export default function App() {
   const initChat = useCallback((msgs: Message[], dynamicContext: string = '') => {
     // Create a new instance to ensure it uses the most up-to-date API key
     const currentApiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    const aiInstance = new GoogleGenAI({ apiKey: currentApiKey });
 
     const history = msgs.map(m => {
       const parts: any[] = [];
@@ -738,7 +749,6 @@ export default function App() {
       };
     });
 
-    chatRef.current = aiInstance.chats.create({
       model: 'gemini-3-flash-preview',
       history: history,
       config: {
