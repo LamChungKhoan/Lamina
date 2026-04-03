@@ -25,13 +25,23 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    const reply =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Không có phản hồi";
+    console.log("DEBUG RESPONSE:", data); // 👈 QUAN TRỌNG
+
+    if (!data.candidates) {
+      return res.status(500).json({
+        error: "API lỗi",
+        detail: data
+      });
+    }
+
+    const reply = data.candidates[0].content.parts[0].text;
 
     res.status(200).json({ reply });
 
   } catch (error) {
-    res.status(500).json({ error: "Server lỗi" });
+    res.status(500).json({
+      error: "Server lỗi",
+      detail: error.message
+    });
   }
 }
