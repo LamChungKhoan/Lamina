@@ -10,7 +10,14 @@ async function sendMessageToAI(message: string) {
   });
 
   const data = await res.json();
-  return data.reply;
+
+  console.log("DATA NHẬN:", data);
+
+  if (data.reply) return data.reply;
+
+  if (data.error) return "LỖI: " + JSON.stringify(data.detail);
+
+  return "Không rõ phản hồi";
 }
 
 export default function TestAI() {
@@ -20,7 +27,7 @@ export default function TestAI() {
 
       <button
         onClick={async () => {
-          const reply = await sendMessageToAI("Test thử AI");
+          const reply = await sendMessageToAI("Phân tích thị trường hôm nay");
           alert(reply);
         }}
       >
