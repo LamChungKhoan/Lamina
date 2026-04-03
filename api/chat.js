@@ -25,10 +25,8 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    // 🔥 IN LOG RA ĐỂ XEM LỖI THẬT
     console.log("FULL RESPONSE:", JSON.stringify(data, null, 2));
 
-    // ❌ Nếu API lỗi → trả lỗi thật ra frontend
     if (!response.ok) {
       return res.status(500).json({
         error: "Google API lỗi",
