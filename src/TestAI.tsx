@@ -1,38 +1,38 @@
-import React from "react";
+// import React from "react";
 
-async function sendMessageToAI(message: string) {
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ message })
-  });
+// async function sendMessageToAI(message: string) {
+//   const res = await fetch("/api/chat", {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/json"
+//     },
+//     body: JSON.stringify({ message })
+//   });
 
-  const data = await res.json();
+//   const data = await res.json();
 
-  console.log("DATA NHẬN:", data);
+//   console.log("DATA NHẬN:", data);
 
-  if (data.reply) return data.reply;
+//   if (data.reply) return data.reply;
 
-  if (data.error) return "LỖI: " + JSON.stringify(data.detail);
+//   if (data.error) return "LỖI: " + JSON.stringify(data.detail);
 
-  return "Không rõ phản hồi";
-}
+//   return "Không rõ phản hồi";
+// }
 
-export default function TestAI() {
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>Test Quang</h2>
+// export default function TestAI() {
+//   return (
+//     <div style={{ padding: 20 }}>
+//       <h2>Test Quang</h2>
 
-      <button
-        onClick={async () => {
-          const reply = await sendMessageToAI("Phân tích thị trường hôm nay");
-          alert(reply);
-        }}
-      >
-        Test AI
-      </button>
-    </div>
-  );
-}
+//       <button
+//         onClick={async () => {
+//           const reply = await sendMessageToAI("Phân tích thị trường hôm nay");
+//           alert(reply);
+//         }}
+//       >
+//         Test AI
+//       </button>
+//     </div>
+//   );
+// }
