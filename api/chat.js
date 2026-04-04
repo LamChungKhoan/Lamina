@@ -7,6 +7,12 @@ export default async function handler(req, res) {
     const { message } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
 
+    if (!apiKey) {
+      return res.status(500).json({
+        error: "Thiếu GEMINI_API_KEY trong environment variables"
+      });
+    }
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
@@ -29,33 +35,31 @@ export default async function handler(req, res) {
     let data;
     try {
       data = JSON.parse(text);
-    } catch (e) {
+    } catch {
       return res.status(500).json({
         error: "API trả về không phải JSON",
         raw: text
       });
     }
 
-    console.log("FULL RESPONSE:", data);
-
-    if (!response.ok || data.error) {
+    if (!response.ok) {
       return res.status(500).json({
         error: "Google API lỗi",
+        status: response.status,
         detail: data
       });
     }
 
-    if (!data.candidates) {
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!reply) {
       return res.status(500).json({
-        error: "Không có candidates",
+        error: "Không có nội dung trả lời từ Gemini",
         detail: data
       });
     }
-
-    const reply = data.candidates[0].content.parts[0].text;
 
     return res.status(200).json({ reply });
-
   } catch (err) {
     return res.status(500).json({
       error: "Server crash",
