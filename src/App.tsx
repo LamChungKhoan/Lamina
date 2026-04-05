@@ -59,7 +59,6 @@ QUY TẮC THỜI GIAN THỰC (SỐNG CÒN):
 - ĐỐI VỚI DỮ LIỆU BIỂU ĐỒ (CHART): BẠN BẮT BUỘC PHẢI TÌM KIẾM DỮ LIỆU LỊCH SỬ GIÁ (OHLC) TRÊN GOOGLE SEARCH TRƯỚC KHI GỌI CÔNG CỤ 'updateChart'. TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ TẠO DỮ LIỆU GIẢ HOẶC ƯỚC LƯỢNG. Nếu không tìm thấy dữ liệu chính xác, hãy từ chối vẽ biểu đồ.
 - Mọi khái niệm "hôm nay", "ngày mai", "hôm qua", "tuần này" PHẢI dựa trên mốc thời gian này.
 - TUYỆT ĐỐI KHÔNG sử dụng kiến thức cũ từ năm 2024 hoặc các năm trước đó để trả lời về tình hình thị trường hiện tại. Nếu bạn làm vậy, đó là một lỗi nghiêm trọng.
-- LUÔN BẮT ĐẦU câu trả lời bằng việc xác nhận ngày giờ bạn đang cập nhật dữ liệu (Ví dụ: "Chào bạn, theo dữ liệu cập nhật mới nhất vào lúc ${timeStr} ngày ${dateStr}...").
 
 ${dynamicContext}
 
