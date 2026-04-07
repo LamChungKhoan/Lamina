@@ -59,6 +59,7 @@ QUY TẮC THỜI GIAN THỰC (SỐNG CÒN):
 - ĐỐI VỚI DỮ LIỆU BIỂU ĐỒ (CHART): BẠN BẮT BUỘC PHẢI TÌM KIẾM DỮ LIỆU LỊCH SỬ GIÁ (OHLC) TRÊN GOOGLE SEARCH TRƯỚC KHI GỌI CÔNG CỤ 'updateChart'. TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ TẠO DỮ LIỆU GIẢ HOẶC ƯỚC LƯỢNG. Nếu không tìm thấy dữ liệu chính xác, hãy từ chối vẽ biểu đồ.
 - Mọi khái niệm "hôm nay", "ngày mai", "hôm qua", "tuần này" PHẢI dựa trên mốc thời gian này.
 - TUYỆT ĐỐI KHÔNG sử dụng kiến thức cũ từ năm 2024 hoặc các năm trước đó để trả lời về tình hình thị trường hiện tại. Nếu bạn làm vậy, đó là một lỗi nghiêm trọng.
+- LUÔN BẮT ĐẦU câu trả lời bằng việc xác nhận ngày giờ bạn đang cập nhật dữ liệu (Ví dụ: "Chào bạn, theo dữ liệu cập nhật mới nhất vào lúc ${timeStr} ngày ${dateStr}...").
 
 ${dynamicContext}
 
@@ -94,6 +95,7 @@ CẤM TUYỆT ĐỐI (NEGATIVE CONSTRAINTS):
 GỢI Ý MÃ CỔ PHIẾU LIÊN QUAN (QUICK ANALYZE):
 - NẾU BẠN PHÂN TÍCH MỘT HOẶC NHIỀU CỔ PHIẾU, BẮT BUỘC PHẢI ĐỀ XUẤT 2-3 MÃ CỔ PHIẾU CÙNG NGÀNH HOẶC LIÊN QUAN ĐỂ NGƯỜI DÙNG PHÂN TÍCH TIẾP.
 - Hãy in danh sách này ở dòng cuối cùng của câu trả lời theo định dạng chính xác sau: \`[GỢI Ý MÃ LIÊN QUAN: HSG, NKG, VGS]\`. CHỈ IN RA ĐÚNG 1 DÒNG DUY NHẤT, TUYỆT ĐỐI KHÔNG IN LẶP LẠI NHIỀU LẦN.
+- SAU KHI IN RA DÒNG GỢI Ý NÀY, BẠN BẮT BUỘC PHẢI DỪNG LẠI NGAY LẬP TỨC. TUYỆT ĐỐI KHÔNG ĐƯỢC VIẾT THÊM BẤT KỲ KÝ TỰ NÀO KHÁC (như v v v v...). Việc sinh ra các ký tự rác ở cuối câu trả lời là một lỗi hệ thống cực kỳ nghiêm trọng.
 - TUYỆT ĐỐI KHÔNG tự ý bịa ra các mã không tồn tại trên sàn chứng khoán Việt Nam.
 
 NHẬN DIỆN TÂM LÝ & TRÍ TUỆ CẢM XÚC ĐỈNH CAO (HIGH EQ & CONTEXT AWARENESS):
@@ -326,7 +328,8 @@ const MessageItem = React.memo(({
       }
     }
     
-    content = content.replace(suggestionRegex, '').trim();
+    // Remove the suggestion text and any trailing garbage characters (like repeated 'v's or 'V's)
+    content = content.replace(/\[GỢI Ý MÃ LIÊN QUAN:\s*([A-Z0-9,\s]+)\][\s\S]*/gi, '').trim();
     
     return { displayContent: content, extractedSymbols: Array.from(new Set(symbols)) };
   }, [msg.content, msg.role]);
@@ -730,7 +733,9 @@ export default function App() {
          parts.push({ text: '[Hình ảnh đã được gửi trong tin nhắn này]' });
       }
       if (m.content) {
-        parts.push({ text: m.content });
+        // Strip the interruption message from history to prevent the model from hallucinating and repeating it
+        let cleanContent = m.content.replace(/\*?\(Kết nối bị gián đoạn\. Vui lòng hỏi tiếp ý bạn đang quan tâm\.\)\*?/g, '').trim();
+        parts.push({ text: cleanContent || ' ' });
       }
       return {
         role: m.role,
@@ -996,7 +1001,7 @@ export default function App() {
       const uniqueSentimentSymbols = [...new Set(recentMessages.map(m => m.sentimentConfig?.symbol).filter(Boolean))];
       const uniqueChartSymbols = [...new Set(recentMessages.map(m => m.chartConfig?.symbol).filter(Boolean))];
 
-      const spamRule = `QUY TẮC CHỐNG SPAM (RẤT QUAN TRỌNG): Bạn ĐÃ GỌI công cụ analyzeSentiment cho các mã [${uniqueSentimentSymbols.join(', ')}] và updateChart cho các mã [${uniqueChartSymbols.join(', ')}] trong các câu trả lời trước. TUYỆT ĐỐI KHÔNG GỌI LẠI các công cụ này cho các mã trên nữa, trừ khi người dùng yêu cầu cập nhật lại rõ ràng. TUYỆT ĐỐI KHÔNG LẶP LẠI những phân tích đã nói ở câu trước, chỉ trả lời thẳng vào ý mới.`;
+      const spamRule = `QUY TẮC CHỐNG SPAM (RẤT QUAN TRỌNG): Bạn ĐÃ GỌI công cụ analyzeSentiment cho các mã [${uniqueSentimentSymbols.join(', ')}] và updateChart cho các mã [${uniqueChartSymbols.join(', ')}] trong các câu trả lời trước. TUYỆT ĐỐI KHÔNG GỌI LẠI các công cụ này cho các mã trên nữa, trừ khi người dùng yêu cầu cập nhật lại rõ ràng. TUYỆT ĐỐI KHÔNG LẶP LẠI những phân tích đã nói ở câu trước, chỉ trả lời thẳng vào ý mới. TUYỆT ĐỐI KHÔNG BAO GIỜ tự viết câu "(Kết nối bị gián đoạn. Vui lòng hỏi tiếp ý bạn đang quan tâm.)" vào câu trả lời của bạn, đây là lỗi hệ thống nghiêm trọng.`;
 
       const dynamicContext = `[HỆ THỐNG: Thời gian hiện tại là ${currentTime}. NẾU NGƯỜI DÙNG HỎI VỀ MỘT MÃ CỔ PHIẾU, BẠN BẮT BUỘC PHẢI DÙNG GOOGLE SEARCH ĐỂ TÌM GIÁ MỚI NHẤT HÔM NAY, TUYỆT ĐỐI KHÔNG BỊA GIÁ. CẤM TUYỆT ĐỐI viết mã JSON ra khung chat. CẤM TUYỆT ĐỐI VIẾT CÁC THẺ XML NHƯ <analyzeSentiment> RA KHUNG CHAT. CHỈ GỌI updateChart NẾU NGƯỜI DÙNG YÊU CẦU VẼ BIỂU ĐỒ. DỮ LIỆU BIỂU ĐỒ PHẢI LÀ THẬT VÀ ĐƯỢC TÌM KIẾM TỪ GOOGLE SEARCH. NẾU KHÔNG TÌM THẤY DỮ LIỆU OHLC CHÍNH XÁC, TUYỆT ĐỐI KHÔNG VẼ BIỂU ĐỒ. ĐẶC BIỆT LƯU Ý (LỖI HỆ THỐNG NGHIÊM TRỌNG): BẠN BẮT BUỘC PHẢI VIẾT TOÀN BỘ BÀI PHÂN TÍCH VÀ LỜI KHUYÊN BẰNG VĂN BẢN XONG XUÔI HOÀN TOÀN, RỒI MỚI ĐƯỢC GỌI CÔNG CỤ (updateChart, analyzeSentiment) Ở CUỐI CÙNG. NẾU BẠN GỌI CÔNG CỤ (updateChart, analyzeSentiment) TRƯỚC HOẶC GIỮA CHỪNG, HỆ THỐNG SẼ NGẮT KẾT NỐI VÀ NGƯỜI DÙNG SẼ KHÔNG ĐỌC ĐƯỢC CHỮ NÀO CẢ. LƯU Ý: Riêng công cụ Google Search thì BẮT BUỘC PHẢI GỌI ĐẦU TIÊN để lấy dữ liệu giá trước khi viết phân tích. BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH gọi analyzeSentiment khi tư vấn điểm mua/bán để làm cơ sở đối chiếu tâm lý đám đông, NHƯNG NHỚ LÀ PHẢI GỌI SAU KHI ĐÃ VIẾT XONG TEXT. NẾU NGƯỜI DÙNG HỎI NHIỀU MÃ, CHỈ GỌI analyzeSentiment CHO 1 MÃ DUY NHẤT. LƯU Ý QUAN TRỌNG: Hãy trả lời TỰ NHIÊN như một người bạn, súc tích và cô đọng (dưới 1000 từ) để tránh lỗi "Incomplete JSON segment" do vượt quá giới hạn độ dài. TUYỆT ĐỐI KHÔNG lặp lại câu chào hỏi. CẤM TUYỆT ĐỐI việc đưa thông tin thời gian (ví dụ: "theo dữ liệu cập nhật mới nhất vào lúc...") vào câu trả lời, điều này rất thiếu tự nhiên. Thời gian hệ thống cung cấp chỉ để bạn biết ngữ cảnh, KHÔNG ĐƯỢC nói ra. Nếu người dùng hỏi các câu hỏi đời thường, tâm sự, bức xúc cá nhân (ví dụ: "thị trường chán quá", "có nên chửi broker không"), BẮT BUỘC PHẢI trả lời CỰC KỲ NGẮN GỌN (1-3 câu), tinh tế, giống như 2 người bạn đang chat, KHÔNG gạch đầu dòng phân tích dài dòng và TUYỆT ĐỐI KHÔNG gọi công cụ analyzeSentiment hay updateChart. NHỚ IN RA DUY NHẤT 1 DÒNG [GỢI Ý MÃ LIÊN QUAN: ...] Ở CUỐI CÂU TRẢ LỜI NẾU CÓ PHÂN TÍCH CỔ PHIẾU. ${spamRule}]`;
       
