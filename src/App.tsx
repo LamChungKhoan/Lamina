@@ -331,6 +331,10 @@ const MessageItem = React.memo(({
     // Remove the suggestion text and any trailing garbage characters (like repeated 'v's or 'V's)
     content = content.replace(/\[GỢI Ý MÃ LIÊN QUAN:\s*([A-Z0-9,\s]+)\][\s\S]*/gi, '').trim();
     
+    // Remove hallucinated XML tags for tools
+    content = content.replace(/<analyzeSentiment>[\s\S]*?<\/analyzeSentiment>/gi, '').trim();
+    content = content.replace(/<updateChart>[\s\S]*?<\/updateChart>/gi, '').trim();
+    
     return { displayContent: content, extractedSymbols: Array.from(new Set(symbols)) };
   }, [msg.content, msg.role]);
 
