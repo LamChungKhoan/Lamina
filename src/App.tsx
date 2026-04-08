@@ -544,27 +544,11 @@ const SUGGESTED_PROMPTS = [
 
 const updateChartTool: FunctionDeclaration = {
   name: "updateChart",
-  description: "Sử dụng công cụ này ĐỂ HIỂN THỊ BIỂU ĐỒ trên giao diện. CHỈ DÙNG KHI NGƯỜI DÙNG YÊU CẦU VẼ BIỂU ĐỒ HOẶC PHÂN TÍCH KỸ THUẬT. TUYỆT ĐỐI KHÔNG tự ý gọi nếu người dùng chỉ hỏi về tâm lý hoặc tin tức. BẠN (AI) phải tự tổng hợp dữ liệu giá (OHLC) từ Google Search và truyền vào công cụ này. DỮ LIỆU PHẢI LÀ THẬT VÀ CHÍNH XÁC. CẤM BỊA ĐẶT DỮ LIỆU. Nếu không có dữ liệu thật, KHÔNG ĐƯỢC GỌI CÔNG CỤ NÀY. TUYỆT ĐỐI CẤM xuất dữ liệu nến dưới dạng văn bản JSON hoặc Code Block trong khung chat. LƯU Ý: Nếu người dùng có hỏi thêm các vấn đề khác ngoài biểu đồ, bạn PHẢI trả lời các vấn đề đó bằng văn bản trước. Nếu người dùng CHỈ yêu cầu vẽ biểu đồ, bạn có thể gọi trực tiếp công cụ này.",
+  description: "Sử dụng công cụ này ĐỂ HIỂN THỊ BIỂU ĐỒ trên giao diện. CHỈ DÙNG KHI NGƯỜI DÙNG YÊU CẦU VẼ BIỂU ĐỒ HOẶC PHÂN TÍCH KỸ THUẬT. TUYỆT ĐỐI KHÔNG tự ý gọi nếu người dùng chỉ hỏi về tâm lý hoặc tin tức. BẠN CHỈ CẦN CUNG CẤP MÃ CỔ PHIẾU (symbol) VÀ CÁC GHI CHÚ KỸ THUẬT (trendlines, zones, markers). HỆ THỐNG SẼ TỰ ĐỘNG LẤY DỮ LIỆU GIÁ THỰC TẾ 100% TỪ THỊ TRƯỜNG. TUYỆT ĐỐI CẤM xuất dữ liệu nến dưới dạng văn bản JSON hoặc Code Block trong khung chat. LƯU Ý: Nếu người dùng có hỏi thêm các vấn đề khác ngoài biểu đồ, bạn PHẢI trả lời các vấn đề đó bằng văn bản trước. Nếu người dùng CHỈ yêu cầu vẽ biểu đồ, bạn có thể gọi trực tiếp công cụ này.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       symbol: { type: Type.STRING, description: "Mã cổ phiếu (VD: FPT, HPG, VNINDEX)" },
-      data: {
-        type: Type.ARRAY,
-        description: "Dữ liệu nến (OHLC) của cổ phiếu. Cần ít nhất 20-30 nến để hiển thị.",
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            time: { type: Type.STRING, description: "Thời gian (YYYY-MM-DD)" },
-            open: { type: Type.NUMBER },
-            high: { type: Type.NUMBER },
-            low: { type: Type.NUMBER },
-            close: { type: Type.NUMBER },
-            volume: { type: Type.NUMBER, description: "Khối lượng giao dịch (VD: 1200000)" }
-          },
-          required: ["time", "open", "high", "low", "close"]
-        }
-      },
       trendlines: {
         type: Type.ARRAY,
         description: "Danh sách các đường Trendline cần vẽ",
@@ -620,7 +604,7 @@ const updateChartTool: FunctionDeclaration = {
         description: "Đặt là true nếu dữ liệu lịch sử (OHLC) là mô phỏng dựa trên xu hướng thay vì dữ liệu khớp lệnh thực tế 100%. Mặc định là true."
       }
     },
-    required: ["symbol", "data"]
+    required: ["symbol"]
   }
 };
 
@@ -1020,9 +1004,9 @@ export default function App() {
       }
       
       const TIMEOUT_MS = 120000; // 120 seconds timeout to allow for slow API responses
-      const MAX_RETRIES = 1; // 1 retry is enough for fail-fast
+      const MAX_RETRIES = 3; // Increase retries for 503 High Demand errors
       let retries = MAX_RETRIES;
-      let delay = 1000;
+      let delay = 2000; // Start with 2s delay
       let success = false;
 
       let fullResponse = '';
@@ -1139,7 +1123,7 @@ export default function App() {
           success = true;
         } catch (error: any) {
           const errorMessage = error?.message || String(error);
-          const isUnavailable = errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('504');
+          const isUnavailable = errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('504') || errorMessage.toLowerCase().includes('high demand');
           const isJsonError = errorMessage.includes('Incomplete JSON segment') || errorMessage.includes('JSON');
           const isTimeout = errorMessage.includes('TIMEOUT') || errorMessage.includes('DEADLINE_EXCEEDED') || errorMessage.toLowerCase().includes('timeout');
           
@@ -1185,8 +1169,8 @@ export default function App() {
       } else if (errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED') || errorString.includes('quota')) {
         isQuotaError = true;
         errorMessage = "⚠️ **Hệ thống đã vượt quá giới hạn truy cập API (Lỗi 429 - Quota Exceeded / Resource Exhausted).**\n\nĐể tiếp tục sử dụng, vui lòng thiết lập API Key của riêng bạn.";
-      } else if (errorString.includes('503') || errorString.includes('UNAVAILABLE') || errorString.includes('500') || errorString.includes('502') || errorString.includes('504')) {
-        errorMessage = "⚠️ **Hệ thống đang quá tải (Lỗi 50x - Server Error).**\n\nHiện tại có quá nhiều yêu cầu truy cập cùng lúc. Vui lòng thử lại sau ít phút.";
+      } else if (errorString.includes('503') || errorString.includes('UNAVAILABLE') || errorString.includes('500') || errorString.includes('502') || errorString.includes('504') || errorString.includes('high demand')) {
+        errorMessage = "⚠️ **Mô hình AI đang quá tải (High Demand).**\n\nHiện tại có quá nhiều yêu cầu truy cập cùng lúc khiến hệ thống không thể phản hồi. Vui lòng thử lại sau ít phút.";
       } else if (errorString.includes('Incomplete JSON segment') || errorString.includes('JSON')) {
         errorMessage = "⚠️ **Lỗi xử lý dữ liệu (JSON Error).**\n\nCâu trả lời của AI quá dài hoặc bị ngắt quãng giữa chừng. Vui lòng thử hỏi lại với nội dung ngắn gọn hơn.";
       }

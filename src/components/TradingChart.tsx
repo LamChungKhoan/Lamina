@@ -49,6 +49,63 @@ export const TradingChart = React.memo(({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const [fetchedData, setFetchedData] = React.useState<CandlestickData[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [isRealData, setIsRealData] = React.useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!symbol) return;
+      setIsLoading(true);
+      setError(null);
+      setIsRealData(false);
+      try {
+        // Fetch real data from a public API (e.g., VNDirect or similar)
+        // Since we are in the browser, we can use fetch.
+        // We'll use a proxy or a known open API if possible.
+        // Let's try to use Yahoo Finance via a proxy or a public API.
+        // For Vietnamese stocks, we can use a public API like Fireant or VNDirect if they allow CORS.
+        // If not, we might need to use a CORS proxy.
+        // Let's try VNDirect API directly first.
+        const cleanSymbol = symbol.toUpperCase().trim();
+        const endDate = new Date().toISOString().split('T')[0];
+        const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 6 months
+        
+        const response = await fetch(`https://finfo-api.vndirect.com.vn/v4/stock_prices?sort=date&q=code:${cleanSymbol}~date:gte:${startDate}~date:lte:${endDate}&size=200`);
+        if (!response.ok) throw new Error('Failed to fetch data');
+        
+        const result = await response.json();
+        if (result && result.data && result.data.length > 0) {
+          const formattedData = result.data.map((item: any) => ({
+            time: item.date,
+            open: item.adOpen || item.open,
+            high: item.adHigh || item.high,
+            low: item.adLow || item.low,
+            close: item.adClose || item.close,
+            volume: item.nmVolume || item.volume
+          })).reverse(); // API returns descending, lightweight-charts needs ascending
+          setFetchedData(formattedData);
+          setIsRealData(true);
+        } else {
+          // Fallback to provided data if API fails or returns empty
+          setFetchedData(data);
+        }
+      } catch (err) {
+        console.error("Error fetching chart data:", err);
+        setFetchedData(data); // Fallback to provided data
+        setError("Không thể tải dữ liệu trực tiếp, đang dùng dữ liệu mô phỏng.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (data.length === 0) {
+      fetchData();
+    } else {
+      setFetchedData(data);
+    }
+  }, [symbol, data]);
 
   
 
@@ -207,8 +264,8 @@ export const TradingChart = React.memo(({
     };
 
     // Filter valid data and sort by time to prevent lightweight-charts errors
-    const validData = Array.isArray(data) 
-      ? data.filter(d => 
+    const validData = Array.isArray(fetchedData) 
+      ? fetchedData.filter(d => 
           d && 
           d.time && 
           typeof d.open === 'number' && !isNaN(d.open) &&
@@ -395,12 +452,12 @@ export const TradingChart = React.memo(({
     } catch (e) {
       console.error("Error updating chart content:", e);
     }
-  }, [data, trendlines, zones, markers]);
+  }, [fetchedData, trendlines, zones, markers]);
 
 
 
   return (
-    <div className="w-full h-full flex flex-col bg-transparent">
+    <div className="w-full h-full flex flex-col bg-transparent relative">
       <div className="px-4 py-3 pr-16 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -409,7 +466,12 @@ export const TradingChart = React.memo(({
         </div>
         
         <div className="flex items-center gap-2">
-          {isSimulation && (
+          {isRealData && !isLoading && !error && (
+            <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 hidden sm:block">
+              <span className="text-[10px] font-medium text-emerald-500 uppercase tracking-wider">Dữ liệu thực tế</span>
+            </div>
+          )}
+          {!isRealData && isSimulation && !isLoading && !error && (
             <div className="px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 hidden sm:block">
               <span className="text-[10px] font-medium text-amber-500 uppercase tracking-wider">Dữ liệu mô phỏng</span>
             </div>
@@ -424,6 +486,22 @@ export const TradingChart = React.memo(({
           </button>
         </div>
       </div>
+
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-10">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-emerald-400 font-medium">Đang tải dữ liệu giá thực tế...</span>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute top-14 left-4 right-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3 py-2 rounded-md z-10">
+          {error}
+        </div>
+      )}
+
       <div ref={chartContainerRef} className="flex-1 w-full min-h-0" />
     </div>
   );
