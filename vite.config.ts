@@ -19,9 +19,13 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
 
-    // 👇 thêm đoạn này
-    build: {
-      chunkSizeWarningLimit: 1000,
-    },
-  };
-});
+   build: {
+  chunkSizeWarningLimit: 1000,
+  rollupOptions: {
+    output: {
+      manualChunks: {
+        vendor: ['react', 'react-dom'],
+      }
+    }
+  }
+},
