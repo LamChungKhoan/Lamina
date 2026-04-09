@@ -985,8 +985,71 @@ export default function App() {
     setMessages((prev) => [...prev, { id: modelMessageId, role: 'model', content: '' }]);
 
     try {
-      const currentTime = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      // Extract symbols and fetch latest prices
+      const symbols = new Set<string>();
+      const upperMatch = text.match(/\b[A-Z]{3}\b/g);
+      if (upperMatch) upperMatch.forEach(s => symbols.add(s));
+      const keywordMatch = text.match(/(?:mã|cổ phiếu|giá|mua|bán|nhận định|phân tích|xem giúp|điểm số)\s+([a-zA-Z0-9]{3})\b/gi);
+      if (keywordMatch) {
+        keywordMatch.forEach(m => {
+          const parts = m.split(/\s+/);
+          if (parts.length > 1) symbols.add(parts[parts.length - 1].toUpperCase());
+        });
+      }
       
+      const upperText = text.toUpperCase();
+      if (upperText.includes('VNINDEX') || upperText.includes('VN-INDEX')) {
+        symbols.add('VNINDEX');
+      }
+      if (upperText.includes('VN30')) {
+        symbols.add('VN30');
+      }
+
+      let priceContext = '';
+      const symbolsToFetch = Array.from(symbols);
+      if (symbolsToFetch.length > 0) {
+        const prices = await Promise.all(symbolsToFetch.map(async (symbol) => {
+          try {
+            const to = Math.floor(Date.now() / 1000);
+            const from = to - 730 * 24 * 60 * 60; // 730 days back to get ~2 years of trading days
+            const response = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?resolution=1D&symbol=${symbol}&from=${from}&to=${to}`)}`);
+            const data = await response.json();
+            if (data && data.c && data.c.length > 0) {
+              const closes = data.c; // All available closes in the last 2 years
+              const current = closes[closes.length - 1];
+              const prev = closes.length > 1 ? closes[closes.length - 2] : current;
+              const periodHigh = Math.max(...closes);
+              const periodLow = Math.min(...closes);
+              const pctChange1D = prev ? (((current - prev) / prev) * 100).toFixed(2) : 0;
+              
+              // Get 1 month, 3 month, 6 month, 1 year ago prices if available
+              const price1M = closes.length >= 22 ? closes[closes.length - 22] : closes[0];
+              const price3M = closes.length >= 66 ? closes[closes.length - 66] : closes[0];
+              const price6M = closes.length >= 132 ? closes[closes.length - 132] : closes[0];
+              const price1Y = closes.length >= 252 ? closes[closes.length - 252] : closes[0];
+              
+              const pctChange1M = price1M ? (((current - price1M) / price1M) * 100).toFixed(2) : 0;
+              const pctChange3M = price3M ? (((current - price3M) / price3M) * 100).toFixed(2) : 0;
+              const pctChange6M = price6M ? (((current - price6M) / price6M) * 100).toFixed(2) : 0;
+              const pctChange1Y = price1Y ? (((current - price1Y) / price1Y) * 100).toFixed(2) : 0;
+
+              // Only send the last 20 days of raw array to save tokens, but provide the macro stats
+              const recentCloses = closes.slice(-20);
+
+              return `${symbol}: Giá hiện tại ${current} (Thay đổi: ${pctChange1D}% so với phiên trước). Hiệu suất: 1 tháng (${pctChange1M}%), 3 tháng (${pctChange3M}%), 6 tháng (${pctChange6M}%), 1 năm (${pctChange1Y}%). Đỉnh 2 năm: ${periodHigh}, Đáy 2 năm: ${periodLow}. Chuỗi giá 20 phiên gần nhất: ${recentCloses.join(', ')}`;
+            }
+          } catch (e) {
+            console.error("Error fetching price for", symbol, e);
+          }
+          return null;
+        }));
+        
+        const validPrices = prices.filter(Boolean);
+        if (validPrices.length > 0) {
+          priceContext = `\n\n[DỮ LIỆU HỆ THỐNG TỰ ĐỘNG CẬP NHẬT (TẦM NHÌN DÀI HẠN 1-2 NĂM): ${validPrices.join(' | ')}. BẠN BẮT BUỘC PHẢI NHÌN VÀO BỨC TRANH TOÀN CẢNH DÀI HẠN NÀY ĐỂ PHÂN TÍCH (ví dụ: chu kỳ 1 năm, vùng tích lũy dài hạn, đỉnh lịch sử). TUYỆT ĐỐI KHÔNG ĐƯỢC BẢO LÀ KHÔNG RÕ HAY LỖI KẾT NỐI.]`;
+        }
+      }
+
       // Extract recently analyzed symbols to prevent spam
       const recentMessages = messages.slice(-5);
       const uniqueSentimentSymbols = [...new Set(recentMessages.map(m => m.sentimentConfig?.symbol).filter(Boolean))];
@@ -994,7 +1057,23 @@ export default function App() {
 
       const spamRule = `QUY TẮC CHỐNG SPAM (RẤT QUAN TRỌNG): Bạn ĐÃ GỌI công cụ analyzeSentiment cho các mã [${uniqueSentimentSymbols.join(', ')}] và updateChart cho các mã [${uniqueChartSymbols.join(', ')}] trong các câu trả lời trước. TUYỆT ĐỐI KHÔNG GỌI LẠI các công cụ này cho các mã trên nữa, trừ khi người dùng yêu cầu cập nhật lại rõ ràng. TUYỆT ĐỐI KHÔNG LẶP LẠI những phân tích đã nói ở câu trước, chỉ trả lời thẳng vào ý mới. TUYỆT ĐỐI KHÔNG BAO GIỜ tự viết câu "(Kết nối bị gián đoạn. Vui lòng hỏi tiếp ý bạn đang quan tâm.)" vào câu trả lời của bạn, đây là lỗi hệ thống nghiêm trọng.`;
 
-      const dynamicContext = `[HỆ THỐNG: Thời gian hiện tại là ${currentTime}. NẾU NGƯỜI DÙNG HỎI VỀ MỘT MÃ CỔ PHIẾU, BẠN BẮT BUỘC PHẢI DÙNG GOOGLE SEARCH ĐỂ TÌM GIÁ MỚI NHẤT HÔM NAY, TUYỆT ĐỐI KHÔNG BỊA GIÁ. CẤM TUYỆT ĐỐI viết mã JSON ra khung chat. CẤM TUYỆT ĐỐI VIẾT CÁC THẺ XML NHƯ <analyzeSentiment> RA KHUNG CHAT. CHỈ GỌI updateChart NẾU NGƯỜI DÙNG YÊU CẦU VẼ BIỂU ĐỒ. DỮ LIỆU BIỂU ĐỒ PHẢI LÀ THẬT VÀ ĐƯỢC TÌM KIẾM TỪ GOOGLE SEARCH. NẾU KHÔNG TÌM THẤY DỮ LIỆU OHLC CHÍNH XÁC, TUYỆT ĐỐI KHÔNG VẼ BIỂU ĐỒ. ĐẶC BIỆT LƯU Ý (LỖI HỆ THỐNG NGHIÊM TRỌNG): BẠN BẮT BUỘC PHẢI VIẾT TOÀN BỘ BÀI PHÂN TÍCH VÀ LỜI KHUYÊN BẰNG VĂN BẢN XONG XUÔI HOÀN TOÀN, RỒI MỚI ĐƯỢC GỌI CÔNG CỤ (updateChart, analyzeSentiment) Ở CUỐI CÙNG. NẾU BẠN GỌI CÔNG CỤ (updateChart, analyzeSentiment) TRƯỚC HOẶC GIỮA CHỪNG, HỆ THỐNG SẼ NGẮT KẾT NỐI VÀ NGƯỜI DÙNG SẼ KHÔNG ĐỌC ĐƯỢC CHỮ NÀO CẢ. LƯU Ý: Riêng công cụ Google Search thì BẮT BUỘC PHẢI GỌI ĐẦU TIÊN để lấy dữ liệu giá trước khi viết phân tích. BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH gọi analyzeSentiment khi tư vấn điểm mua/bán để làm cơ sở đối chiếu tâm lý đám đông, NHƯNG NHỚ LÀ PHẢI GỌI SAU KHI ĐÃ VIẾT XONG TEXT. NẾU NGƯỜI DÙNG HỎI NHIỀU MÃ, CHỈ GỌI analyzeSentiment CHO 1 MÃ DUY NHẤT. LƯU Ý QUAN TRỌNG: Hãy trả lời TỰ NHIÊN như một người bạn, súc tích và cô đọng (dưới 1000 từ) để tránh lỗi "Incomplete JSON segment" do vượt quá giới hạn độ dài. TUYỆT ĐỐI KHÔNG lặp lại câu chào hỏi. CẤM TUYỆT ĐỐI việc đưa thông tin thời gian (ví dụ: "theo dữ liệu cập nhật mới nhất vào lúc...") vào câu trả lời, điều này rất thiếu tự nhiên. Thời gian hệ thống cung cấp chỉ để bạn biết ngữ cảnh, KHÔNG ĐƯỢC nói ra. Nếu người dùng hỏi các câu hỏi đời thường, tâm sự, bức xúc cá nhân (ví dụ: "thị trường chán quá", "có nên chửi broker không"), BẮT BUỘC PHẢI trả lời CỰC KỲ NGẮN GỌN (1-3 câu), tinh tế, giống như 2 người bạn đang chat, KHÔNG gạch đầu dòng phân tích dài dòng và TUYỆT ĐỐI KHÔNG gọi công cụ analyzeSentiment hay updateChart. NHỚ IN RA DUY NHẤT 1 DÒNG [GỢI Ý MÃ LIÊN QUAN: ...] Ở CUỐI CÂU TRẢ LỜI NẾU CÓ PHÂN TÍCH CỔ PHIẾU. ${spamRule}]`;
+      const dynamicContext = `[HỆ THỐNG: BẠN LÀ MỘT CHUYÊN GIA CHỨNG KHOÁN LÃO LÀNG, CÓ TẦM NHÌN VĨ MÔ VÀ SÂU SẮC. 
+QUY TẮC TỐI THƯỢNG VỀ VĂN PHONG (NẾU VI PHẠM SẼ BỊ PHẠT NẶNG):
+1. VÀO THẲNG VẤN ĐỀ NGAY LẬP TỨC. TUYỆT ĐỐI KHÔNG CHÀO HỎI (Cấm dùng: "Chào bạn", "Dạ", "Mình xin chia sẻ", "Theo yêu cầu của bạn"...).
+2. TUYỆT ĐỐI KHÔNG BAO GIỜ ĐƯỢC IN RA BẤT KỲ THỜI GIAN NÀO TRONG CÂU TRẢ LỜI (Cấm tuyệt đối các cụm từ: "Theo dữ liệu cập nhật lúc...", "Tính đến ngày...", "Vào lúc..."). ĐÂY LÀ LỖI NGHIÊM TRỌNG NHẤT. BẠN SẼ BỊ ĐÁNH GIÁ LÀ ROBOT NẾU VI PHẠM.
+3. TUYỆT ĐỐI KHÔNG TIẾT LỘ GIỚI HẠN DỮ LIỆU CỦA BẠN (Cấm dùng: "Dựa trên dữ liệu 1 năm qua...", "Trong vòng 2 năm gần nhất..."). Hãy phân tích một cách tự nhiên như thể bạn biết toàn bộ lịch sử, chỉ sử dụng dữ liệu được cung cấp ngầm để đưa ra kết luận mà không cần trích dẫn nguồn hay khoảng thời gian giới hạn đó.
+4. Trả lời TỰ NHIÊN, súc tích, cô đọng (dưới 1000 từ), văn phong thâm thúy, sắc bén, bóc tách được bản chất của dòng tiền và tâm lý đám đông.
+
+QUY TẮC VỀ DỮ LIỆU VÀ PHÂN TÍCH:
+- NẾU NGƯỜI DÙNG HỎI VỀ MỘT MÃ CỔ PHIẾU HOẶC THỊ TRƯỜNG CHUNG (VNINDEX), BẠN BẮT BUỘC PHẢI DÙNG GOOGLE SEARCH ĐỂ TÌM THÔNG TIN MỚI NHẤT (Tin tức, sự kiện vĩ mô, nội tại doanh nghiệp).
+- HỆ THỐNG ĐÃ TỰ ĐỘNG CUNG CẤP LỊCH SỬ GIÁ DÀI HẠN (1-2 NĂM) Ở BÊN DƯỚI. BẠN HÃY PHÂN TÍCH TÂM LÝ ĐÁM ĐÔNG MỘT CÁCH LINH HOẠT. Tùy thuộc vào câu hỏi của người dùng (hỏi lướt sóng ngắn hạn hay đầu tư dài hạn) và diễn biến thực tế của cổ phiếu, hãy chọn góc nhìn phù hợp nhất (ngắn hạn T+, trung hạn, hoặc chu kỳ dài hạn) để bóc tách tâm lý dòng tiền. Kết hợp linh hoạt giữa bức tranh toàn cảnh và nhịp đập ngắn hạn để có câu trả lời thỏa đáng và đúng trọng tâm nhất.
+- CẤM TUYỆT ĐỐI viết mã JSON ra khung chat. CẤM TUYỆT ĐỐI VIẾT CÁC THẺ XML NHƯ <analyzeSentiment> RA KHUNG CHAT.
+- CHỈ GỌI updateChart NẾU NGƯỜI DÙNG YÊU CẦU VẼ BIỂU ĐỒ.
+- BẠN BẮT BUỘC PHẢI VIẾT TOÀN BỘ BÀI PHÂN TÍCH VÀ LỜI KHUYÊN BẰNG VĂN BẢN XONG XUÔI HOÀN TOÀN, RỒI MỚI ĐƯỢC GỌI CÔNG CỤ (updateChart, analyzeSentiment) Ở CUỐI CÙNG.
+- BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH gọi analyzeSentiment khi tư vấn điểm mua/bán để làm cơ sở đối chiếu tâm lý đám đông, NHƯNG NHỚ LÀ PHẢI GỌI SAU KHI ĐÃ VIẾT XONG TEXT. NẾU NGƯỜI DÙNG HỎI NHIỀU MÃ, CHỈ GỌI analyzeSentiment CHO 1 MÃ DUY NHẤT.
+- Nếu người dùng hỏi các câu hỏi đời thường, tâm sự, bức xúc cá nhân, BẮT BUỘC PHẢI trả lời CỰC KỲ NGẮN GỌN (1-3 câu), tinh tế, giống như 2 người bạn đang chat.
+- NHỚ IN RA DUY NHẤT 1 DÒNG [GỢI Ý MÃ LIÊN QUAN: ...] Ở CUỐI CÂU TRẢ LỜI NẾU CÓ PHÂN TÍCH CỔ PHIẾU.
+${spamRule}]${priceContext}`;
       
       let messagePayload: any = text;
       
@@ -1021,9 +1100,9 @@ export default function App() {
       while (retries >= 0 && !success) {
         try {
           // ALWAYS re-initialize chat to ensure clean history without duplicate hiddenContexts
-          // Limit history to last 20 messages to prevent payload from getting too large
+          // Limit history to last 5 messages to prevent payload from getting too large and exceeding max tokens
           // We pass the current messages + the new user message
-          const historyMessages = [...messages, userMessage].slice(-20);
+          const historyMessages = [...messages, userMessage].slice(-5);
           initChat(historyMessages, dynamicContext);
 
           // Clear previous state if this is a retry
