@@ -78,10 +78,43 @@ export const TradingChart = React.memo(({
         const startDate = Math.floor((Date.now() - 180 * 24 * 60 * 60 * 1000) / 1000); // 6 months
         
         const targetUrl = `https://services.entrade.com.vn/chart-api/v2/ohlcs/${endpoint}?resolution=1D&symbol=${cleanSymbol}&from=${startDate}&to=${endDate}`;
-        const response = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`);
-        if (!response.ok) throw new Error('Failed to fetch data');
         
-        const result = await response.json();
+        let result = null;
+        
+        // Try multiple proxies for better reliability
+        const proxies = [
+          `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+        ];
+
+        for (const proxyUrl of proxies) {
+          try {
+            const response = await fetch(proxyUrl);
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.t && data.t.length > 0) {
+                result = data;
+                break;
+              }
+            }
+          } catch (e) {
+            console.warn(`Proxy failed: ${proxyUrl}`);
+          }
+        }
+
+        // Fallback to allorigins /get if others fail
+        if (!result) {
+          const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+          if (response.ok) {
+            const rawResult = await response.json();
+            if (rawResult.contents) {
+              result = JSON.parse(rawResult.contents);
+            }
+          }
+        }
+
+        if (!result) throw new Error('Failed to fetch data from all proxies');
+        
         if (result && result.t && result.t.length > 0) {
           const formattedData = result.t.map((time: number, index: number) => ({
             time: time,
