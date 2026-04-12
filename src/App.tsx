@@ -757,7 +757,7 @@ export default function App() {
     });
 
     chatRef.current = aiInstance.chats.create({
-      model: 'gemini-3-flash-latest',
+      model: 'gemini-3-flash-preview',
       history: history,
       config: {
         systemInstruction: getSystemInstruction(dynamicContext),
