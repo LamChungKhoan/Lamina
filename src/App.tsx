@@ -261,7 +261,9 @@ type Message = {
   content: string;
   sources?: { title: string; uri: string }[];
   image?: string;
+  images?: string[];
   fileName?: string;
+  fileNames?: string[];
   chartConfig?: any;
   sentimentConfig?: any;
   isQuotaError?: boolean;
@@ -368,7 +370,29 @@ const MessageItem = React.memo(({
       )}>
         {msg.role === 'user' ? (
           <div className="flex flex-col gap-3">
-            {msg.image && (
+            {msg.images && msg.images.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {msg.images.map((img, idx) => (
+                  img.startsWith('data:image/') ? (
+                    <img 
+                      key={idx}
+                      src={img} 
+                      alt="Uploaded content" 
+                      className="max-w-full sm:max-w-sm h-32 w-auto rounded-xl border border-white/20 shadow-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => onImageClick(img)}
+                    />
+                  ) : (
+                    <div key={idx} className="flex items-center gap-3 p-3 bg-white/10 rounded-xl border border-white/20">
+                      <BookOpen className="w-8 h-8 text-fuchsia-400" />
+                      <span className="text-base font-medium text-white truncate max-w-[200px]">
+                        {msg.fileNames?.[idx] || 'Tài liệu đính kèm'}
+                      </span>
+                    </div>
+                  )
+                ))}
+              </div>
+            )}
+            {msg.image && !msg.images && (
               msg.image.startsWith('data:image/') ? (
                 <img 
                   src={msg.image} 
@@ -734,8 +758,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedFileUrl, setSelectedFileUrl] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<{url: string, file: File}[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -780,7 +803,7 @@ export default function App() {
 
     const history = msgs.map(m => {
       const parts: any[] = [];
-      if (m.image) {
+      if (m.image || (m.images && m.images.length > 0)) {
          // We strip the actual base64 image data from the history to prevent the payload 
          // from becoming too large over multiple turns. The model only needs the image 
          // in the current turn, which is sent separately in sendMessageStream.
@@ -880,7 +903,7 @@ export default function App() {
       const firstUserMsg = messages.find(m => m.role === 'user');
       const title = firstUserMsg?.content 
         ? (firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')) 
-        : (firstUserMsg?.image ? 'Hình ảnh' : 'Cuộc trò chuyện mới');
+        : (firstUserMsg?.image || (firstUserMsg?.images && firstUserMsg.images.length > 0) ? 'Hình ảnh' : 'Cuộc trò chuyện mới');
 
       if (existingIdx >= 0) {
         newSessions[existingIdx] = {
@@ -955,22 +978,43 @@ export default function App() {
   }, [messages]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Kích thước file quá lớn. Vui lòng chọn file dưới 5MB.");
-        return;
-      }
-      setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedFileUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    const files = Array.from(e.target.files || []);
+    addFiles(files);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const addFiles = (files: File[]) => {
+    const validFiles = files.filter(file => file.type.startsWith('image/') || file.type === 'application/pdf');
+    
+    if (validFiles.length === 0) return;
+    
+    if (selectedFiles.length + validFiles.length > 20) {
+      alert("Bạn chỉ có thể tải lên tối đa 20 file.");
+      return;
+    }
+
+    const newFiles: {url: string, file: File}[] = [];
+    let processedCount = 0;
+
+    validFiles.forEach(file => {
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`File ${file.name} quá lớn. Vui lòng chọn file dưới 5MB.`);
+        processedCount++;
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newFiles.push({ url: reader.result as string, file });
+        processedCount++;
+        if (processedCount === validFiles.length) {
+          setSelectedFiles(prev => [...prev, ...newFiles]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -1010,51 +1054,30 @@ export default function App() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Kích thước file quá lớn. Vui lòng chọn file dưới 5MB.");
-        return;
-      }
-      setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedFileUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    const files = Array.from(e.dataTransfer.files || []);
+    addFiles(files);
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
+    const files: File[] = [];
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
         const file = items[i].getAsFile();
-        if (file) {
-          if (file.size > 5 * 1024 * 1024) {
-            alert("Kích thước file quá lớn. Vui lòng chọn file dưới 5MB.");
-            return;
-          }
-          setSelectedFile(file);
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setSelectedFileUrl(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-          
-          // Prevent default paste behavior if we handled an image
-          e.preventDefault();
-          return; // Only handle the first image
-        }
+        if (file) files.push(file);
       }
+    }
+    
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
     }
   };
 
-  const removeFile = () => {
-    setSelectedFileUrl(null);
-    setSelectedFile(null);
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSendRef = useRef<(text: string) => Promise<void>>(() => Promise.resolve());
@@ -1069,7 +1092,7 @@ export default function App() {
   }, []);
 
   const handleSend = async (text: string) => {
-    if ((!text.trim() && !selectedFileUrl) || isLoading) return;
+    if ((!text.trim() && selectedFiles.length === 0) || isLoading) return;
 
     let sessionId = currentSessionId;
     if (!sessionId) {
@@ -1081,18 +1104,16 @@ export default function App() {
       id: Date.now().toString(), 
       role: 'user', 
       content: text,
-      image: selectedFileUrl || undefined,
-      fileName: selectedFile?.name || undefined
+      images: selectedFiles.map(f => f.url),
+      fileNames: selectedFiles.map(f => f.file.name)
     };
     
     // Optimistically add user message
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     
-    const currentFileUrl = selectedFileUrl;
-    const currentFile = selectedFile;
-    setSelectedFileUrl(null);
-    setSelectedFile(null);
+    const currentFiles = [...selectedFiles];
+    setSelectedFiles([]);
     setIsLoading(true);
     
     const modelMessageId = (Date.now() + 1).toString();
@@ -1196,12 +1217,12 @@ ${spamRule}]${priceContext}`;
       
       let messagePayload: any = text;
       
-      if (currentFileUrl && currentFile) {
-        const base64Data = currentFileUrl.split(',')[1];
-        messagePayload = [
-          { inlineData: { data: base64Data, mimeType: currentFile.type } },
-          { text: text }
-        ];
+      if (currentFiles.length > 0) {
+        messagePayload = currentFiles.map(f => {
+          const base64Data = f.url.split(',')[1];
+          return { inlineData: { data: base64Data, mimeType: f.file.type } };
+        });
+        messagePayload.push({ text: text || ' ' });
       }
       
       const TIMEOUT_MS = 120000; // 120 seconds timeout to allow for slow API responses
@@ -1756,36 +1777,38 @@ ${spamRule}]${priceContext}`;
         <div className="max-w-7xl mx-auto relative group">
           {/* File Preview Area */}
           <AnimatePresence>
-            {selectedFileUrl && (
+            {selectedFiles.length > 0 && (
               <motion.div 
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute bottom-full left-0 mb-4 p-2 bg-[#1A1528]/90 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-[0_0_30px_rgba(147,51,234,0.2)] z-20"
+                className="absolute bottom-full left-0 mb-4 p-2 bg-[#1A1528]/90 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-[0_0_30px_rgba(147,51,234,0.2)] z-20 flex flex-wrap gap-2 max-w-full overflow-x-auto"
               >
-                <div className="relative">
-                  {selectedFileUrl.startsWith('data:image/') ? (
-                    <img 
-                      src={selectedFileUrl} 
-                      alt="Preview" 
-                      className="h-24 w-auto rounded-xl object-contain border border-white/10 cursor-pointer hover:opacity-90 transition-opacity" 
-                      onClick={() => setZoomedImage(selectedFileUrl)}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 h-24 min-w-[200px]">
-                      <BookOpen className="w-8 h-8 text-fuchsia-400" />
-                      <span className="text-base font-medium text-white truncate max-w-[150px]">
-                        {selectedFile?.name || 'Tài liệu đính kèm'}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={removeFile}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg hover:bg-red-600 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+                {selectedFiles.map((f, index) => (
+                  <div key={index} className="relative shrink-0">
+                    {f.url.startsWith('data:image/') ? (
+                      <img 
+                        src={f.url} 
+                        alt="Preview" 
+                        className="h-24 w-auto rounded-xl object-contain border border-white/10 cursor-pointer hover:opacity-90 transition-opacity" 
+                        onClick={() => setZoomedImage(f.url)}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 h-24 min-w-[200px]">
+                        <BookOpen className="w-8 h-8 text-fuchsia-400" />
+                        <span className="text-base font-medium text-white truncate max-w-[150px]">
+                          {f.file.name || 'Tài liệu đính kèm'}
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removeFile(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg hover:bg-red-600 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1829,6 +1852,7 @@ ${spamRule}]${priceContext}`;
               <input 
                 type="file" 
                 accept="image/*,application/pdf" 
+                multiple
                 className="hidden" 
                 ref={fileInputRef}
                 onChange={handleFileUpload}
@@ -1868,7 +1892,7 @@ ${spamRule}]${priceContext}`;
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 type="submit"
-                disabled={(!input.trim() && !selectedFileUrl) || isLoading}
+                disabled={(!input.trim() && selectedFiles.length === 0) || isLoading}
                 className="flex-shrink-0 p-3.5 m-1 bg-purple-600 hover:bg-purple-500 disabled:bg-white/5 disabled:text-slate-600 text-white rounded-[16px] transition-all duration-200 ease-out shadow-[0_0_15px_rgba(147,51,234,0.4)] disabled:shadow-none relative overflow-hidden"
               >
                 <Send className="w-6 h-6 relative z-10" />
