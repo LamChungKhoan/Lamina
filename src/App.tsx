@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Send, User, Bot, Loader2, AlertCircle, BookOpen, Newspaper, RefreshCcw, Globe, Activity, Image as ImageIcon, X, History, Plus, MessageSquare, Trash2, BarChart2, PanelLeftClose, PanelRightClose, Key, Pencil, Check, Zap, Share2, Download } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -415,30 +418,35 @@ const MessageItem = React.memo(({
           <div className="flex flex-col relative z-10">
             <div className="markdown-body">
               {displayContent ? (
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h3: ({node, ...props}) => <h3 className="!text-[#E879F9] !font-extrabold !text-2xl !mt-10 !mb-4 drop-shadow-[0_0_8px_rgba(232,121,249,0.5)]" {...props} />,
-                    code({node, inline, className, children, ...props}: any) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const codeString = String(children).replace(/\n$/, '');
-                      if (match && match[1] === 'json' && codeString.includes('"data": [')) {
-                        return <span className="italic text-purple-400">*(Biểu đồ đang được xử lý...)*</span>;
+                <div className="overflow-x-auto max-w-full">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      h3: ({node, ...props}) => <h3 className="!text-[#E879F9] !font-extrabold !text-2xl !mt-10 !mb-4 drop-shadow-[0_0_8px_rgba(232,121,249,0.5)]" {...props} />,
+                      code({node, inline, className, children, ...props}: any) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const codeString = String(children).replace(/\n$/, '');
+                        if (match && match[1] === 'json' && codeString.includes('"data": [')) {
+                          return <span className="italic text-purple-400">*(Biểu đồ đang được xử lý...)*</span>;
+                        }
+                        return !inline && match ? (
+                          <div className="overflow-x-auto max-w-full bg-black/30 p-4 rounded-lg my-4">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </div>
+                        ) : (
+                          <code className="text-fuchsia-200 bg-purple-900/40 px-1.5 py-0.5 rounded-md border border-purple-500/30 whitespace-pre-wrap break-words" {...props}>
+                            {children}
+                          </code>
+                        )
                       }
-                      return !inline && match ? (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      ) : (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      )
-                    }
-                  }}
-                >
-                  {displayContent}
-                </ReactMarkdown>
+                    }}
+                  >
+                    {displayContent}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 <LoadingIndicator />
               )}
@@ -715,7 +723,15 @@ const formatMarkdownContent = (content: string) => {
   let formatted = content
     .replace(/\[GỢI Ý MÃ LIÊN QUAN:\s*([A-Z0-9,\s]+)\][\s\S]*/gi, '')
     .replace(/<analyzeSentiment>[\s\S]*?<\/analyzeSentiment>/gi, '')
-    .replace(/<updateChart>[\s\S]*?<\/updateChart>/gi, '');
+    .replace(/<updateChart>[\s\S]*?<\/updateChart>/gi, '')
+    // replace latex appox with text
+    .replace(/\\approx/g, '≈')
+    // fix latex tags displaying inline without math tags
+    .replace(/\$([^$]+)\$/g, (match, p1) => {
+      // If it's already well-formed math, leave it
+      if (p1.includes('\\')) return match;
+      return match; // return as is if no backslash
+    });
 
   // Format numbered lists as headers. Split title and content.
   formatted = formatted.replace(/^\s*(?:\*\*)?(\d+\.\s+)(.*)$/gm, (match, prefix, restOfLine) => {
@@ -2001,9 +2017,24 @@ ${spamRule}]${priceContext}`;
             {/* Content */}
             <div className="prose prose-invert max-w-none relative z-10 text-[40px] prose-p:text-[40px] prose-p:leading-[1.8] prose-p:mb-12 prose-a:text-fuchsia-400 prose-strong:!text-white prose-strong:!font-bold prose-code:text-fuchsia-200">
               <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
-                  h3: ({node, ...props}) => <h3 className="!text-[#E879F9] !font-extrabold !text-[56px] !mt-20 !mb-10 drop-shadow-[0_0_15px_rgba(232,121,249,0.5)]" {...props} />
+                  h3: ({node, ...props}) => <h3 className="!text-[#E879F9] !font-extrabold !text-[56px] !mt-20 !mb-10 drop-shadow-[0_0_15px_rgba(232,121,249,0.5)]" {...props} />,
+                  code({node, inline, className, children, ...props}: any) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    return !inline && match ? (
+                      <div className="overflow-x-auto max-w-full bg-black/30 p-4 rounded-lg my-4">
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      </div>
+                    ) : (
+                      <code className="text-fuchsia-200 bg-purple-900/40 px-3 py-1 rounded-md border border-purple-500/30 whitespace-pre-wrap break-words" {...props}>
+                        {children}
+                      </code>
+                    )
+                  }
                 }}
               >
                 {formatMarkdownContent(exportingMessage.content || '')}
